@@ -1,51 +1,54 @@
-# 🚗 ParkPulse — Smart Campus Parking Management System
+# 🚗 ParkPulse 2.0 — Smart Campus Parking Management System
 
+[![PWA Ready](https://img.shields.io/badge/PWA-Installable-10B981?logo=pwa&logoColor=white)](https://web.dev/progressive-web-apps/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B%20Ready-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-24%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
-[![SQLite](https://img.shields.io/badge/SQLite-Built--in%20node:sqlite-003B57?logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-4.7-010101?logo=socket.io&logoColor=white)](https://socket.io/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-[![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900?logo=leaflet&logoColor=white)](https://leafletjs.com/)
 
-> **ParkPulse** is an end-to-end, real-time smart campus parking allocation platform designed to eliminate parking congestion, prevent spot hoarding, and provide turn-by-turn navigation within campus parking lots.
+> **ParkPulse 2.0** is an installable, mobile-first Progressive Web App (PWA) with persistent cloud storage, separate student and staff parking enforcement, real-time First-Come-First-Allocated (FCFA) slots, dual-ring GPS geofencing, and Google Maps-inspired in-lot navigation.
 
-Built with a high-concurrency **First-Come-First-Allocated (FCFA)** allocation engine, dual-ring **GPS Geofencing**, graph-based **Dijkstra Shortest Path** navigation, and a live **IoT Sensor Digital Twin**.
+Tagline: **Park Smarter. Save Time. Move Better.**
 
 ---
 
 ## 📑 Table of Contents
 
-- [Key Highlights](#-key-highlights)
+- [What's New in ParkPulse 2.0](#-whats-new-in-parkpulse-20)
 - [System Architecture](#-system-architecture)
-- [Core Features](#-core-features)
+- [Student vs. Staff Parking Separation](#-student-vs-staff-parking-separation)
+- [Mobile-First PWA & Installation](#-mobile-first-pwa--installation)
+- [Core Engines](#-core-engines)
   - [1. FCFA Allocation & Concurrency Engine](#1-fcfa-allocation--concurrency-engine)
   - [2. Dual-Ring GPS Geofencing](#2-dual-ring-gps-geofencing)
-  - [3. Dijkstra Graph-Based Navigation](#3-dijkstra-graph-based-navigation)
-  - [4. Real-Time Digital Twin & IoT Simulation](#4-real-time-digital-twin--iot-simulation)
-  - [5. Fair Waiting Queue & Offer Windows](#5-fair-waiting-queue--offer-windows)
-  - [6. Admin Command Center & Analytics](#6-admin-command-center--analytics)
-- [Tech Stack](#-tech-stack)
+  - [3. Dijkstra In-Lot Navigation & Digital Twin](#3-dijkstra-in-lot-navigation--digital-twin)
+  - [4. Dynamic 3-Minute Hold & Queue Dispatcher](#4-dynamic-3-minute-hold--queue-dispatcher)
+- [Cloud Database & PostgreSQL Migration](#-cloud-database--postgresql-migration)
 - [Directory Structure](#-directory-structure)
 - [Quick Start Guide](#-quick-start-guide)
   - [Prerequisites](#prerequisites)
-  - [Installation & Setup](#installation--setup)
-  - [Running the Project](#running-the-project)
+  - [Installation & Local Run](#installation--local-run)
+  - [Running Automated Tests](#running-automated-tests)
 - [Demo Credentials](#-demo-credentials)
-- [API Reference](#-api-reference)
-- [WebSocket Real-Time Events](#-websocket-real-time-events)
+- [Cloud Deployment (Render + Vercel)](#-cloud-deployment-render--vercel)
 - [License](#-license)
 
 ---
 
-## 🌟 Key Highlights
+## 🚀 What's New in ParkPulse 2.0
 
-- **Zero Blind Circling:** Instant automated allocation to the nearest optimal vacant spot based on vehicle type and entry lane.
-- **Race Condition Prevention:** Utilizes atomic SQLite `BEGIN IMMEDIATE` transactions to guarantee that no slot is double-booked even during peak arrival spikes.
-- **Fair Anti-Squatting Geofencing:** Employs Haversine distance calculations across two geofence rings (Campus Perimeter & Parking Gate) to prevent students from reserving slots before arriving on campus.
-- **3-Minute Dynamic Hold Timer:** Automatically revokes and reallocates reserved slots if the driver does not occupy the spot within the grace period.
-- **Lane-Level In-Lot Navigation:** Computes the shortest driving path from the gate entrance through lot lanes directly to the designated slot.
-- **IoT Sensor Simulation:** Emulates hardware barrier gates, ultrasonic/magnetic spot occupancy sensors, and fault detection without requiring physical hardware.
+1. **Installable Mobile PWA (`vite-plugin-pwa`):** Standalone app mode, emerald green branding (`#10B981`), home screen installation banners for Android and iOS Safari, and offline app shell caching.
+2. **5-Tab Mobile Navigation:** Tailored for 320px–390px+ smartphones with native bottom navigation:
+   - 🏠 **Home:** Location check, vehicle class selector, category vacancy rates, instant booking.
+   - 🗺️ **Parking Map:** Google Maps-style interactive campus parking lot with pan/zoom and live route highlighting.
+   - 🅿️ **My Slot:** Active reservation hold timer, turn-by-turn guidance, parking check-in and release.
+   - 📜 **History:** Comprehensive past parking sessions and duration logs.
+   - 👤 **Profile:** Authoritative user category badge (`Student` vs `Staff`), vehicle preference, and sign out.
+3. **Strict Student & Staff Segregation:** Dedicated student areas (Zone A & B) and staff areas (Zone C & D) enforced authoritatively on the backend.
+4. **Cloud Database Architecture:** Dual PostgreSQL and SQLite engine with automated migrations and one-command SQLite-to-PostgreSQL data sync (`npm run migrate:pg`).
+5. **Offline Safety:** Network detection halts live reservation requests during disconnections while maintaining cached map visibility.
 
 ---
 
@@ -53,93 +56,112 @@ Built with a high-concurrency **First-Come-First-Allocated (FCFA)** allocation e
 
 ```mermaid
 flowchart TD
-    subgraph Client ["Client (React + Vite)"]
-        UI[Student & Admin Dashboards]
-        Map[Leaflet GPS & Digital Twin SVG]
+    subgraph MobilePWA ["Mobile PWA (React 18 + Vite)"]
+        SW[Service Worker & Offline Cache]
+        UI[5-Tab Mobile Shell]
+        NavMap[Interactive Dijkstra Parking Map]
         SocketClient[Socket.IO Client]
     end
 
-    subgraph Server ["Server (Node.js & Express)"]
-        API[REST API Layer]
-        Auth[JWT & Role-based Auth]
-        SocketServer[Socket.IO Gateway]
-        
-        subgraph Engine ["Core Processing Services"]
-            FCFA[FCFA Allocation Engine]
-            Geo[Geofence Verifier - Haversine]
-            Path[Dijkstra Path Planner]
-            Cron[Hold Expiry Sweeper - 5s]
+    subgraph BackendService ["Backend Cloud Service (Node.js & Express)"]
+        Router[REST API Routes]
+        AuthGuard[JWT Cookie Auth & Category Guards]
+        SocketGateway[Socket.IO Gateway]
+
+        subgraph CoreEngines ["Core Allocation Engines"]
+            FCFA[FCFA Slot Allocation]
+            Segregation[Student / Staff Area Segregator]
+            Geo[Dual-Ring Haversine Geofence]
+            Dijkstra[Graph Shortest-Path Engine]
+            HoldCron[Background Expiry Sweeper (5s)]
         end
     end
 
-    subgraph DataStore ["Database Layer"]
-        DB[(Node.js 24 SQLite Engine)]
+    subgraph PersistenceLayer ["Persistence Layer"]
+        PG[(PostgreSQL 14+ / SQLite)]
+        Nodes[(Map Nodes & Edges Table)]
     end
 
-    UI -->|HTTP Requests| API
-    Map -->|Coordinates & Accuracy| API
-    SocketClient <-->|Real-Time Bi-Directional State| SocketServer
-    API --> Auth
-    Auth --> Engine
-    FCFA --> DB
-    Cron -->|Expire & Reclaim| DB
-    DB --> SocketServer
-    SocketServer -->|Broadcast Slot Updates| SocketClient
+    UI --> Router
+    NavMap --> Dijkstra
+    Router --> AuthGuard --> CoreEngines
+    CoreEngines --> PG
+    Dijkstra --> Nodes
+    HoldCron -->|Reclaim Expired| PG
+    PG --> SocketGateway
+    SocketGateway <==>|Real-Time State Sync| SocketClient
 ```
 
 ---
 
-## ⚡ Core Features
+## 🔒 Student vs. Staff Parking Separation
 
-### 1. FCFA Allocation & Concurrency Engine
-- Assigns available parking slots using **First-Come-First-Allocated (FCFA)** logic based on strict sequence ticketing.
-- Filters slots according to **vehicle classification** (`bike`, `car`, `staff-only`) and zone accessibility.
-- Implements an automated **3-minute temporary hold timer**. If the vehicle does not check in, the hold is reclaimed and offered to the next queued driver.
+To eliminate parking competition between faculty and students, ParkPulse 2.0 strictly partitions the lot into distinct access-controlled zones:
 
-### 2. Dual-Ring GPS Geofencing
-- **Ring 1: Campus Boundary (500m radius):** Validates whether the student has physically arrived within university grounds.
-- **Ring 2: Parking Gate Area (150m radius):** Restricts active slot allocation requests until the vehicle is physically near the entrance.
-- **GPS Accuracy Verification:** Filters out low-accuracy or spoofed GPS readings (rejects accuracy deviations > 50m). Includes built-in mock location toggles for testing.
+| Zone Code | Zone Name | Vehicle Type | Access Policy | Total Capacity | Allowed Accounts |
+|---|---|---|---|---|---|
+| **Zone A** | Student Bike Parking | 🏍️ Bike | `student_only` | 16 Bays (A1–A16) | Student Accounts Only |
+| **Zone B** | Student Car Parking | 🚗 Car | `student_only` | 12 Bays (B1–B12) | Student Accounts Only |
+| **Zone C** | Staff Car Parking | 🚗 Car | `staff_only` | 8 Bays (C1–C8) | Staff Accounts Only |
+| **Zone D** | Staff Bike Parking | 🏍️ Bike | `staff_only` | 8 Bays (D1–D8) | Staff Accounts Only |
 
-### 3. Dijkstra Graph-Based Navigation
-- Models parking aisles, lane intersections, entrance gate, exit points, and individual parking bays as a weighted directional graph.
-- Calculates the optimal route from `entrance` to the allocated parking bay.
-- Provides visual turn-by-turn guidance and path highlighting on the parking lot digital map.
-
-### 4. Real-Time Digital Twin & IoT Simulation
-- Synchronous 2D visualization of all parking bays across **Zone A (Bikes)**, **Zone B (Cars)**, and **Zone C (Staff Reserved)**.
-- Color-coded live status:
-  - 🟢 **Available / Free**
-  - 🟡 **Held / Reserved (Countdown Active)**
-  - 🔴 **Occupied**
-  - ⚪ **Maintenance / Blocked**
-- **Sensor Simulator:** Trigger arrival events, departures, or toggle maintenance status in real-time to watch instant digital twin updates across all connected clients.
-
-### 5. Fair Waiting Queue & Offer Windows
-- When all parking bays are occupied, arriving drivers are queued in strict chronological order.
-- When an occupied slot is vacated or a hold expires, the system automatically triggers a **60-second priority offer** to the driver at the head of the queue.
-
-### 6. Admin Command Center & Analytics
-- **Live Slot & Zone Management:** Add, block, activate, or reconfigure slot priorities dynamically.
-- **Geofence Tuning:** Adjust coordinates, campus boundaries, and gate detection radii directly on an interactive Leaflet map.
-- **Analytics & Heatmaps:** Visualize peak arrival times, hourly occupancy trends, vehicle distribution breakdown, and average parking duration using interactive charts (Recharts).
-- **Audit Logs:** Full traceability for every allocation, expiry, gate entry, and cancellation.
+> **Backend Enforcement:** The FCFA allocation engine validates `user_category` directly from the database record during every slot request. Students can never be assigned staff slots, and staff never consume student capacity.
 
 ---
 
-## 💻 Tech Stack
+## 📱 Mobile-First PWA & Installation
 
-| Layer | Technology | Description |
-|---|---|---|
-| **Frontend** | React 18, Vite | High-performance SPA with modern component architecture |
-| **Styling** | Tailwind CSS, Lucide Icons | Responsive modern UI with clean design system |
-| **Animation** | Framer Motion | Smooth state transitions, dialogs, and loaders |
-| **Mapping & Visuals** | Leaflet, React-Leaflet | GPS positioning and geofence perimeter visualizations |
-| **Charts** | Recharts | Interactive occupancy, dwell time, and peak-hour graphs |
-| **Backend** | Node.js, Express 4 | RESTful API server with modular routing and middleware |
-| **Real-Time** | Socket.IO | Bi-directional WebSocket communication for live lot syncing |
-| **Database** | Node.js 24 SQLite (`node:sqlite`) | Built-in zero-dependency SQLite with WAL mode & atomic transactions |
-| **Validation & Security** | Zod, Helmet, Rate-Limit, Bcrypt, JWT | Hardened API security and request schema validation |
+ParkPulse 2.0 is built to run as a native-feeling mobile app without App Store friction.
+
+### Installing on Android (Chrome / Edge / Brave):
+1. Navigate to the deployed URL.
+2. Tap the floating **Install ParkPulse** action banner at the bottom, or select **Install App** from the browser menu.
+3. The app will launch in full standalone mode with a dedicated home screen icon.
+
+### Installing on iPhone (iOS Safari):
+1. Open the URL in Safari.
+2. Tap the **Share** button in the Safari toolbar.
+3. Scroll down and select **Add to Home Screen**.
+4. Tap **Add** in the top right.
+
+---
+
+## ⚡ Core Engines
+
+### 1. FCFA Allocation & Concurrency Engine
+- Assigns vacant slots using First-Come-First-Allocated ordering.
+- Implements atomic transactions (`BEGIN IMMEDIATE` in SQLite, row-level locking in PostgreSQL) to eliminate race conditions and double-booking during arrival spikes.
+
+### 2. Dual-Ring GPS Geofencing
+- **Ring 1: Campus Boundary (500m radius):** Verifies the driver is on university grounds.
+- **Ring 2: Parking Entrance Gate (150m radius):** Prevents remote slot squatting; requests are unlocked only near the gate.
+- **GPS Accuracy Verification:** Discards inaccurate GPS signals (> 50m drift).
+
+### 3. Dijkstra In-Lot Navigation & Digital Twin
+- Models parking lanes, gates, and bays as a weighted graph stored in database tables `map_nodes` and `map_edges`.
+- Computes turn-by-turn routes with lane guidance (e.g. *"Enter via Main Gate -> Boulevard South -> Turn Left into Student Zone A -> Bay A4"*).
+- Bi-directional Socket.IO updates keep all connected clients synchronized with zero latency.
+
+### 4. Dynamic 3-Minute Hold & Queue Dispatcher
+- Drivers receive a **3-minute hold timer** to park and check in.
+- A background worker running every 5 seconds sweeps expired reservations and automatically offers vacant spots to drivers in the **waiting queue** (with a 60-second claim window).
+
+---
+
+## 🗄️ Cloud Database & PostgreSQL Migration
+
+ParkPulse 2.0 supports zero-config SQLite for local offline development and managed PostgreSQL for cloud production.
+
+### Migrating from SQLite to PostgreSQL
+1. Provide your PostgreSQL connection URL in `server/.env`:
+   ```env
+   DATABASE_URL="postgresql://user:password@host:5432/parkpulse"
+   ```
+2. Run the automated migration script:
+   ```bash
+   npm --prefix server run migrate:pg
+   ```
+   *This automatically executes `001_postgres_schema.sql`, migrates records in foreign-key dependency order, and outputs a verification summary verifying row-count parity.*
 
 ---
 
@@ -147,37 +169,33 @@ flowchart TD
 
 ```text
 PARKING/
+├── render.yaml               # Render Infrastructure blueprint (PostgreSQL + Node + Web)
 ├── package.json              # Monorepo root scripts (dev, setup, seed)
-├── client/                   # Frontend React + Vite application
-│   ├── public/               # Static assets & icons
+├── client/                   # Mobile-First React PWA
+│   ├── public/               # PWA icons (192, 512, maskable, apple-touch)
 │   ├── src/
-│   │   ├── components/       # Digital Twin, Parking Map & Admin Layout
-│   │   ├── contexts/         # Auth, Socket.IO & Toast notifications
-│   │   ├── lib/              # Axios API clients & Leaflet helpers
+│   │   ├── components/       # ParkingMap, PWAInstallBanner, OfflineNotice, DigitalTwin
+│   │   ├── contexts/         # Auth, Socket.IO, Toast notifications
 │   │   ├── pages/
-│   │   │   ├── LandingPage.jsx         # Landing page with live public statistics
-│   │   │   ├── LoginPage.jsx           # Role-based credential authentication
-│   │   │   ├── admin/                  # Dashboard, Slots, Zones, Geofence, Analytics, Sensors
-│   │   │   └── student/                # Student Dashboard, Allocation, Navigation & Queue
-│   │   ├── App.jsx           # Route definitions & protected route guards
-│   │   └── main.jsx          # React DOM entry point
-│   └── vite.config.js        # Vite build configuration
-└── server/                   # Backend Node.js Express server
+│   │   │   ├── student/      # StudentDashboard (5 bottom tabs: Home, Map, Slot, History, Profile)
+│   │   │   └── admin/        # Admin command center (Slots, Zones, Geofence, Analytics)
+│   │   └── lib/              # Axios API client with VITE_API_URL support
+│   ├── vercel.json           # Vercel SPA routing and PWA caching headers
+│   └── vite.config.js        # VitePWA configuration and build setup
+└── server/                   # Express + Socket.IO Backend
     ├── db/
-    │   ├── database.js       # SQLite connection, schema definition & migrations
-    │   └── seed.js           # Demo database seed data (users, zones, slots)
+    │   ├── migrations/       # 001_postgres_schema.sql (PostgreSQL production DDL)
+    │   ├── migrate-to-pg.js  # SQLite to PostgreSQL migration runner
+    │   ├── database.js       # SQLite & PostgreSQL database adapter
+    │   └── seed.js           # Seeds separate student/staff zones and graph nodes
     ├── lib/
-    │   ├── dijkstra.js       # Shortest path graph algorithm for lot routing
-    │   └── geofence.js       # Haversine distance & perimeter boundary logic
-    ├── middleware/
-    │   └── auth.js           # JWT verification & role authorization guards
-    ├── routes/
-    │   ├── admin.js          # Admin dashboard, zones, slots & analytics routes
-    │   ├── auth.js           # Login, registration, token verification & logout
-    │   └── student.js        # Slot requests, geofence check, check-in/out, queue
+    │   ├── dijkstra.js       # Shortest-path routing over parking lanes
+    │   └── geofence.js       # Haversine distance calculations
     ├── services/
-    │   └── allocationEngine.js # Core FCFA engine, queue dispatcher & hold timers
-    └── index.js              # Express app, Socket.IO gateway & cron jobs
+    │   └── allocationEngine.js # FCFA engine with strict student/staff segregation
+    ├── tests/
+    │   └── parkpulse.test.js # Automated unit & integration test suite
+    └── index.js              # Server entry point with multi-origin CORS & trust proxy
 ```
 
 ---
@@ -185,117 +203,69 @@ PARKING/
 ## 🚀 Quick Start Guide
 
 ### Prerequisites
-- **Node.js** (v22.0.0 or higher recommended, as server uses the built-in `node:sqlite` module).
+- **Node.js** (v22.0.0 or higher recommended).
 - **npm** (v10+).
 
-### Installation & Setup
+### Installation & Local Run
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Parthasarathy-28/Parking-system.git
-   cd Parking-system
-   ```
-
-2. **Install all dependencies & seed the database in one command:**
+1. **Install dependencies and seed the database:**
    ```bash
    npm run setup
    ```
-   *This command installs root, server, and client dependencies, then populates SQLite with campus zones, slots, and demo accounts.*
 
-   *(Alternatively, run step-by-step)*:
+2. **Start frontend and backend concurrently:**
    ```bash
-   npm run install:all
-   npm run seed
+   npm run dev
    ```
+   - **Frontend Client:** [http://localhost:5173](http://localhost:5173)
+   - **Backend API:** [http://localhost:5000](http://localhost:5000)
 
-### Running the Project
+### Running Automated Tests
 
-Start both the backend server and frontend client concurrently:
+Run the built-in test suite verifying FCFA allocation, geofencing, student/staff segregation, and Dijkstra routing:
 
 ```bash
-npm run dev
+npm --prefix server test
 ```
-
-- **Frontend Client:** [http://localhost:5173](http://localhost:5173)
-- **Backend API Server:** [http://localhost:5000](http://localhost:5000)
-- **API Health Check:** [http://localhost:5000/api/health](http://localhost:5000/api/health)
 
 ---
 
 ## 🔑 Demo Credentials
 
-The database comes pre-seeded with accounts for immediate testing:
+Pre-seeded accounts for testing all parking roles and areas:
 
-| Role | Name | Email | Password | Vehicle |
-|---|---|---|---|---|
-| **Admin** | Dr. Rajesh Kumar | `admin@parkpulse.edu` | `Admin@123` | N/A |
-| **Student** | Arun Krishnamurthy | `arun@student.psg.edu` | `Student@123` | 🏍️ Bike |
-| **Student** | Balasubramanian Venkat | `bala@student.psg.edu` | `Student@123` | 🚗 Car |
-| **Student** | Priya Sundararajan | `priya@student.psg.edu` | `Student@123` | 🏍️ Bike |
-| **Staff** | Prof. Suresh Babu | `suresh@staff.psg.edu` | `Staff@123` | 🚗 Car |
-
-> *Tip: The application runs with **Demo Mode** enabled by default, allowing you to simulate your GPS location at the campus parking gate with a single click.*
-
----
-
-## 📡 API Reference
-
-### Authentication (`/api/auth`)
-- `POST /api/auth/login` — Authenticate user and receive HTTP-only JWT cookie.
-- `GET /api/auth/me` — Retrieve current authenticated user profile.
-- `POST /api/auth/logout` — Terminate session and clear cookie.
-
-### Student Endpoints (`/api/student`)
-- `GET /api/student/dashboard` — Get active allocation, queue state, and category availability.
-- `POST /api/student/verify-location` — Validate latitude/longitude against campus geofences.
-- `POST /api/student/request-slot` — Submit an atomic FCFA slot reservation request.
-- `GET /api/student/navigation/:slotId` — Fetch Dijkstra graph path coordinates from entrance to slot.
-- `POST /api/student/confirm-parking` — Check-in and mark slot as occupied upon vehicle arrival.
-- `POST /api/student/exit-parking` — Release slot and complete parking session upon departure.
-- `POST /api/student/cancel-allocation` — Cancel active hold and release slot to queue.
-- `POST /api/student/accept-queue-offer` — Claim offered slot from the waiting queue.
-
-### Admin Endpoints (`/api/admin`)
-- `GET /api/admin/dashboard` — System-wide slot counts, active allocations, and queue lists.
-- `GET /api/admin/slots` — List all parking bays with real-time operational status.
-- `POST /api/admin/slots` — Add a new parking bay to a specific zone.
-- `PATCH /api/admin/slots/:id/status` — Modify slot status (`available`, `maintenance`, `blocked`).
-- `GET /api/admin/zones` — List parking zones with vehicle types and capacities.
-- `GET /api/admin/geofence` — Retrieve current campus and gate geofence parameters.
-- `PUT /api/admin/geofence` — Update geofence coordinates and accuracy thresholds.
-- `GET /api/admin/analytics` — Fetch peak hour volume, utilization ratios, and event logs.
-- `POST /api/admin/sensor-event` — Simulate an IoT sensor trigger (arrival, departure, fault).
-
-### Public Endpoints
-- `GET /api/public/stats` — Live availability metrics for landing page visitors.
-
----
-
-## 🔌 WebSocket Real-Time Events
-
-| Event Name | Direction | Payload | Description |
+| Account Role | Email | Password | Allowed Parking Area |
 |---|---|---|---|
-| `join:slots` | Client ➔ Server | — | Subscribe to live parking slot updates for the college |
-| `slot:updated` | Server ➔ Client | `{ slot, occupancy, operational }` | Broadcasted whenever any slot changes state |
-| `allocation:created` | Server ➔ User | `{ allocationId, slotId, expiresAt }` | Sent to specific user when a slot is assigned |
-| `allocation:expired` | Server ➔ User | `{ allocationId, slotId }` | Sent when a 3-minute hold expires without check-in |
-| `queue:offered` | Server ➔ User | `{ queueId, slotId, expiresAt }` | Sent when a waiting queue driver receives an offer |
-| `queue:updated` | Server ➔ User | `{ position, totalWaiting }` | Queue position advancement notice |
+| **System Admin** | `admin@parkpulse.edu` | `Admin@123` | Full Admin Command Center |
+| **Student (Bike)** | `arun@student.psg.edu` | `Student@123` | 🏍️ Zone A — Student Bikes (A1–A16) |
+| **Student (Car)** | `bala@student.psg.edu` | `Student@123` | 🚗 Zone B — Student Cars (B1–B12) |
+| **Staff (Car)** | `suresh@staff.psg.edu` | `Staff@123` | 🚗 Zone C — Staff Cars (C1–C8) |
+| **Staff (Bike)** | `kavitha@staff.psg.edu` | `Staff@123` | 🏍️ Zone D — Staff Bikes (D1–D8) |
 
 ---
 
-## 🤝 Contributing
+## ☁️ Cloud Deployment (Render + Vercel)
 
-Contributions are welcome! Please follow these steps:
+### Option 1: Full-Stack on Render (Blueprint)
+1. Push your repository to GitHub.
+2. In [Render Dashboard](https://dashboard.render.com), click **New + ➔ Blueprint**.
+3. Select your repository. Render reads `render.yaml` and provisions:
+   - Managed PostgreSQL database
+   - Node.js backend web service
+   - Static frontend client
+4. Deploy with 1 click.
 
-1. Fork the Project repository.
-2. Create your Feature Branch (`git checkout -b feature/SmartRecommendation`).
-3. Commit your changes (`git commit -m "Add smart parking recommendation"`).
-4. Push to the Branch (`git push origin feature/SmartRecommendation`).
-5. Open a Pull Request.
+### Option 2: Frontend on Vercel + Backend on Render
+- **Backend (Render):**
+  - Create a Node Web Service pointing to `server/`.
+  - Set `DATABASE_URL` and `CLIENT_ORIGIN=https://your-app.vercel.app`.
+- **Frontend (Vercel):**
+  - Import `client/` into Vercel.
+  - Set `VITE_API_URL=https://your-backend.onrender.com`.
+  - Vercel automatically applies `vercel.json` for SPA routing and PWA support.
 
 ---
 
 ## 📄 License
 
-This project is open-source and available under the [MIT License](LICENSE).
+Open-source and licensed under the [MIT License](LICENSE).

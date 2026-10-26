@@ -39,9 +39,14 @@ function buildParkingGraph(slots) {
   addEdge('lane-b-row2', 'lane-b-row3', 1);
   addEdge('lane-b-row3', 'lane-b-row4', 1);
 
-  // Zone C lanes (staff)
+  // Zone C lanes (staff cars)
   addEdge('lane-c-start', 'lane-c-row1', 1);
   addEdge('lane-c-row1', 'lane-c-row2', 1);
+
+  // Zone D lanes (staff bikes)
+  addEdge('lane-main-3', 'lane-d-start', 1);
+  addEdge('lane-d-start', 'lane-d-row1', 1);
+  addEdge('lane-d-start', 'lane-d-row2', 1);
 
   // Connect slots to lane nodes
   for (const slot of slots) {
@@ -62,6 +67,11 @@ function buildParkingGraph(slots) {
       const n = parseInt(num.slice(1));
       const row = Math.ceil(n / 4);
       const laneNode = `lane-c-row${row}`;
+      addEdge(laneNode, slotId, 0.5);
+    } else if (num.startsWith('D')) {
+      const n = parseInt(num.slice(1));
+      const row = Math.ceil(n / 4);
+      const laneNode = `lane-d-row${row}`;
       addEdge(laneNode, slotId, 0.5);
     }
   }

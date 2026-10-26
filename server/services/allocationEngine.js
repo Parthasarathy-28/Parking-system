@@ -25,7 +25,7 @@ function getNextSequence(db, collegeId) {
 }
 
 function findBestSlot(db, collegeId, vehicleType, userRole) {
-  const isStaff = userRole === 'staff' || userRole === 'admin';
+  const isStaff = userRole === 'staff';
   let query = `
     SELECT ps.* FROM parking_slots ps
     JOIN parking_zones pz ON ps.zone_id = pz.id
@@ -34,13 +34,17 @@ function findBestSlot(db, collegeId, vehicleType, userRole) {
       AND ps.operational_status = 'available'
       AND ps.occupancy_status = 'free'
   `;
-  if (!isStaff) query += ` AND pz.staff_only = 0`;
+  if (isStaff) {
+    query += ` AND (pz.category = 'staff' OR pz.staff_only = 1)`;
+  } else {
+    query += ` AND (pz.category = 'student' OR pz.category IS NULL) AND pz.staff_only = 0`;
+  }
   query += ` ORDER BY ps.allocation_priority ASC LIMIT 1`;
   return db.prepare(query).get(collegeId, vehicleType);
 }
 
 function findNextBestSlot(db, collegeId, vehicleType, userRole, excludeSlotId) {
-  const isStaff = userRole === 'staff' || userRole === 'admin';
+  const isStaff = userRole === 'staff';
   let query = `
     SELECT ps.* FROM parking_slots ps
     JOIN parking_zones pz ON ps.zone_id = pz.id
@@ -50,7 +54,11 @@ function findNextBestSlot(db, collegeId, vehicleType, userRole, excludeSlotId) {
       AND ps.occupancy_status = 'free'
       AND ps.id != ?
   `;
-  if (!isStaff) query += ` AND pz.staff_only = 0`;
+  if (isStaff) {
+    query += ` AND (pz.category = 'staff' OR pz.staff_only = 1)`;
+  } else {
+    query += ` AND (pz.category = 'student' OR pz.category IS NULL) AND pz.staff_only = 0`;
+  }
   query += ` ORDER BY ps.allocation_priority ASC LIMIT 1`;
   return db.prepare(query).get(collegeId, vehicleType, excludeSlotId);
 }

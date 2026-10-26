@@ -41,10 +41,11 @@ router.post('/login', loginLimiter, (req, res) => {
 
   const token = generateToken({ userId: user.id, role: user.role, collegeId: user.college_id });
 
+  const isProd = process.env.NODE_ENV === 'production';
   res.cookie('parkpulse_token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProd,
+    sameSite: process.env.COOKIE_SAME_SITE || (isProd ? 'none' : 'lax'),
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 
@@ -56,6 +57,7 @@ router.post('/login', loginLimiter, (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      userCategory: user.user_category || user.role,
       vehicleType: user.vehicle_type,
       collegeId: user.college_id,
       collegeName: college?.name,
@@ -67,7 +69,12 @@ router.post('/login', loginLimiter, (req, res) => {
 
 // POST /api/auth/logout
 router.post('/logout', (req, res) => {
-  res.clearCookie('parkpulse_token');
+  const isProd = process.env.NODE_ENV === 'production';
+  res.clearCookie('parkpulse_token', {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: process.env.COOKIE_SAME_SITE || (isProd ? 'none' : 'lax'),
+  });
   return res.json({ message: 'Logged out successfully.' });
 });
 
@@ -81,6 +88,7 @@ router.get('/me', requireAuth, (req, res) => {
       name: req.user.name,
       email: req.user.email,
       role: req.user.role,
+      userCategory: req.user.user_category || req.user.role,
       vehicleType: req.user.vehicle_type,
       collegeId: req.user.college_id,
       collegeName: college?.name,

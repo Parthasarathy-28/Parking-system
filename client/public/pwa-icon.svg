@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#064E3B" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <!-- Background rounded rect -->
+  <rect width="512" height="512" rx="128" fill="url(#emeraldGrad)" />
+  
+  <!-- Outer glowing pulse ring -->
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#A7F3D0" stroke-width="8" opacity="0.4" stroke-dasharray="16 12"/>
+  
+  <!-- Main white badge circle -->
+  <circle cx="256" cy="256" r="160" fill="white" filter="url(#shadow)"/>
+  
+  <!-- Inner Parking 'P' with Emerald Accent -->
+  <path d="M 190 140 L 270 140 C 315 140 345 165 345 210 C 345 255 315 280 270 280 L 235 280 L 235 372 L 190 372 Z M 235 182 L 235 238 L 268 238 C 290 238 302 228 302 210 C 302 192 290 182 268 182 Z" fill="#059669"/>
+  
+  <!-- Pulse lightning / wave accent -->
+  <path d="M 290 320 L 320 320 L 332 290 L 350 350 L 365 320 L 395 320" fill="none" stroke="#10B981" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

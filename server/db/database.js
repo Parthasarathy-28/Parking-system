@@ -205,6 +205,31 @@ function createTables(db) {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    -- Map Nodes (Google Maps style graph nodes)
+    CREATE TABLE IF NOT EXISTS map_nodes (
+      id TEXT PRIMARY KEY,
+      college_id TEXT NOT NULL REFERENCES colleges(id),
+      node_id TEXT NOT NULL,
+      x REAL NOT NULL,
+      y REAL NOT NULL,
+      node_type TEXT NOT NULL,
+      label TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(college_id, node_id)
+    );
+
+    -- Map Edges (Lane connections for Dijkstra shortest-path navigation)
+    CREATE TABLE IF NOT EXISTS map_edges (
+      id TEXT PRIMARY KEY,
+      college_id TEXT NOT NULL REFERENCES colleges(id),
+      from_node_id TEXT NOT NULL,
+      to_node_id TEXT NOT NULL,
+      distance REAL NOT NULL DEFAULT 1.0,
+      direction TEXT DEFAULT 'two_way',
+      is_blocked INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     -- Sequence counter
     CREATE TABLE IF NOT EXISTS request_sequences (
       college_id TEXT NOT NULL REFERENCES colleges(id),
@@ -221,10 +246,47 @@ function createTables(db) {
     CREATE INDEX IF NOT EXISTS idx_queue_college ON waiting_queue(college_id, vehicle_type, status);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
     CREATE INDEX IF NOT EXISTS idx_requests_user ON parking_requests(user_id);
+    CREATE INDEX IF NOT EXISTS idx_map_nodes ON map_nodes(college_id, node_id);
+    CREATE INDEX IF NOT EXISTS idx_map_edges ON map_edges(college_id, from_node_id, to_node_id);
   `);
+
+  ensureColumns(db);
 }
 
-// Wrapper to make node:sqlite work like better-sqlite3 API
-// node:sqlite uses prepare().get(), .all(), .run() - SAME API!
+function ensureColumns(db) {
+  try {
+    const userCols = db.prepare(`PRAGMA table_info(users)`).all().map(c => c.name);
+    if (!userCols.includes('user_category')) {
+      db.exec(`ALTER TABLE users ADD COLUMN user_category TEXT CHECK(user_category IN ('student', 'staff', 'admin'))`);
+      db.exec(`UPDATE users SET user_category = CASE WHEN role = 'admin' THEN 'admin' WHEN role = 'staff' THEN 'staff' ELSE 'student' END WHERE user_category IS NULL`);
+    }
+
+    const zoneCols = db.prepare(`PRAGMA table_info(parking_zones)`).all().map(c => c.name);
+    if (!zoneCols.includes('category')) {
+      db.exec(`ALTER TABLE parking_zones ADD COLUMN category TEXT DEFAULT 'student' CHECK(category IN ('student', 'staff'))`);
+      db.exec(`UPDATE parking_zones SET category = CASE WHEN staff_only = 1 THEN 'staff' ELSE 'student' END WHERE category IS NULL`);
+    }
+    if (!zoneCols.includes('access_policy')) {
+      db.exec(`ALTER TABLE parking_zones ADD COLUMN access_policy TEXT DEFAULT 'student_only' CHECK(access_policy IN ('student_only', 'staff_only', 'open'))`);
+      db.exec(`UPDATE parking_zones SET access_policy = CASE WHEN staff_only = 1 THEN 'staff_only' ELSE 'student_only' END WHERE access_policy IS NULL`);
+    }
+
+    const slotCols = db.prepare(`PRAGMA table_info(parking_slots)`).all().map(c => c.name);
+    if (!slotCols.includes('access_node_id')) {
+      db.exec(`ALTER TABLE parking_slots ADD COLUMN access_node_id TEXT`);
+    }
+
+    const allocCols = db.prepare(`PRAGMA table_info(parking_allocations)`).all().map(c => c.name);
+    if (!allocCols.includes('request_sequence')) {
+      db.exec(`ALTER TABLE parking_allocations ADD COLUMN request_sequence INTEGER`);
+    }
+    if (!allocCols.includes('allocated_at')) {
+      db.exec(`ALTER TABLE parking_allocations ADD COLUMN allocated_at TEXT`);
+      db.exec(`UPDATE parking_allocations SET allocated_at = created_at WHERE allocated_at IS NULL`);
+    }
+  } catch (err) {
+    console.warn('[DB Migration Warning]:', err.message);
+  }
+}
 
 module.exports = { getDb, DB_PATH };

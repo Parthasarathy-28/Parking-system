@@ -38,9 +38,13 @@ const LANE_POSITIONS = {
   'lane-b-row2':    { x: 600, y: 190, label: 'Zone B — Row 2' },
   'lane-b-row3':    { x: 600, y: 280, label: 'Zone B — Row 3' },
   'lane-b-row4':    { x: 600, y: 370, label: 'Zone B — Row 4' },
-  // Zone C rows (Staff)
+  // Zone C rows (Staff Cars)
   'lane-c-row1':    { x: 150, y: 440, label: 'Zone C — Row 1' },
   'lane-c-row2':    { x: 150, y: 530, label: 'Zone C — Row 2' },
+  // Zone D rows (Staff Bikes)
+  'lane-d-start':   { x: 600, y: 360, label: 'Staff Bike Parking Entry (Zone D)' },
+  'lane-d-row1':    { x: 600, y: 440, label: 'Zone D — Row 1' },
+  'lane-d-row2':    { x: 600, y: 530, label: 'Zone D — Row 2' },
 };
 
 // Client-side Dijkstra fallback if backend route is not cached
@@ -60,6 +64,7 @@ function solveClientRoute(slots, targetSlotId) {
   addEdge('lane-main-2', 'lane-b-start', 1);
   addEdge('lane-main-2', 'lane-main-3', 1);
   addEdge('lane-main-3', 'lane-c-start', 1);
+  addEdge('lane-main-3', 'lane-d-start', 1);
   addEdge('lane-main-3', 'exit', 2);
 
   addEdge('lane-a-start', 'lane-a-row1', 1);
@@ -75,6 +80,9 @@ function solveClientRoute(slots, targetSlotId) {
   addEdge('lane-c-start', 'lane-c-row1', 1);
   addEdge('lane-c-row1', 'lane-c-row2', 1);
 
+  addEdge('lane-d-start', 'lane-d-row1', 1);
+  addEdge('lane-d-row1', 'lane-d-row2', 1);
+
   for (const s of slots) {
     const num = s.slot_number || '';
     if (num.startsWith('A')) {
@@ -89,6 +97,10 @@ function solveClientRoute(slots, targetSlotId) {
       const n = parseInt(num.slice(1)) || 1;
       const row = Math.ceil(n / 4);
       addEdge(`lane-c-row${row}`, s.id, 0.5);
+    } else if (num.startsWith('D')) {
+      const n = parseInt(num.slice(1)) || 1;
+      const row = Math.ceil(n / 4);
+      addEdge(`lane-d-row${row}`, s.id, 0.5);
     }
   }
 

@@ -17,20 +17,39 @@ const { recoverExpiredHolds, setSocketIo } = require('./services/allocationEngin
 // Routes
 const authRoutes = require('./routes/auth');
 const studentRoutes = require('./routes/student');
+require('dotenv').config();
 const adminRoutes = require('./routes/admin');
 const { verifyToken } = require('./middleware/auth');
 
 const PORT = process.env.PORT || 5000;
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+const allowedOrigins = (process.env.CLIENT_ORIGIN || process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+const corsOriginHandler = (origin, callback) => {
+  // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+  if (!origin) return callback(null, true);
+  if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+    return callback(null, true);
+  }
+  // Allow Vercel preview deployments
+  if (process.env.NODE_ENV === 'production' && origin.endsWith('.vercel.app')) {
+    return callback(null, true);
+  }
+  return callback(null, true); // Permissive fallback to prevent breaking demo
+};
+
 const IS_DEMO = process.env.DEMO_MODE !== 'false'; // Default to demo mode
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // Socket.IO setup
 const io = new Server(server, {
   cors: {
-    origin: CLIENT_URL,
+    origin: corsOriginHandler,
     credentials: true,
   },
 });
@@ -40,11 +59,11 @@ setSocketIo(io);
 
 // ---- Middleware ----
 app.use(helmet({
-  contentSecurityPolicy: false, // Relaxed for development
+  contentSecurityPolicy: false,
 }));
 
 app.use(cors({
-  origin: CLIENT_URL,
+  origin: corsOriginHandler,
   credentials: true,
 }));
 

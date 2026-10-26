@@ -13,8 +13,9 @@ export function SocketProvider({ children }) {
   useEffect(() => {
     // Get token from cookie
     const token = document.cookie.split(';').find(c => c.trim().startsWith('parkpulse_token='))?.split('=')[1];
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_URL || '/';
 
-    const socket = io('/', {
+    const socket = io(socketUrl, {
       auth: { token },
       withCredentials: true,
       transports: ['websocket', 'polling'],

@@ -1,4 +1,7 @@
-// Student Dashboard — ParkPulse (v2 with Navigation Map + Role-based parking)
+// StudentDashboard.jsx — ParkPulse 2.0 Mobile-First Experience
+// 5 Bottom Navigation Tabs: Home, Parking Map, My Slot, History, Profile
+// Features: Student & Staff segregation, PWA Install Banner, Offline Safety, Real-Time Sync
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -6,7 +9,8 @@ import {
   Bell, LogOut, RefreshCw, AlertTriangle, Info, ChevronRight,
   ParkingCircle, History, Users, Loader2, Wifi, WifiOff,
   ArrowRight, Timer, Shield, Sparkles, X, ThumbsUp, ThumbsDown,
-  LocateFixed, Home, Map
+  LocateFixed, Home, Map, User, QrCode, ShieldCheck, Smartphone,
+  ExternalLink, Compass, Calendar, CheckCircle2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -14,6 +18,8 @@ import { useSocket, useSocketEvent } from '../../contexts/SocketContext';
 import { useToast } from '../../contexts/ToastContext';
 import { studentApi } from '../../lib/api';
 import ParkingMap from '../../components/ParkingMap';
+import PWAInstallBanner from '../../components/PWAInstallBanner';
+import OfflineNotice, { useOnlineStatus } from '../../components/OfflineNotice';
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -26,11 +32,11 @@ function fmtTime(sec) {
 
 function InitialsAvatar({ name, size = 'md' }) {
   const initials = name?.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
-  const sz = size === 'lg' ? 'w-14 h-14 text-xl' : 'w-9 h-9 text-sm';
+  const sz = size === 'lg' ? 'w-16 h-16 text-2xl' : 'w-9 h-9 text-sm';
   const colors = ['bg-emerald-100 text-emerald-700', 'bg-sky-100 text-sky-700', 'bg-violet-100 text-violet-700', 'bg-amber-100 text-amber-700'];
   const color = colors[(name?.charCodeAt(0) || 0) % colors.length];
   return (
-    <div className={`${sz} ${color} rounded-full flex items-center justify-center font-bold flex-shrink-0`}>
+    <div className={`${sz} ${color} rounded-2xl flex items-center justify-center font-bold flex-shrink-0 shadow-sm border border-emerald-200/50`}>
       {initials}
     </div>
   );
@@ -76,16 +82,16 @@ function HoldTimer({ expiresAt, onExpired }) {
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`text-3xl font-bold tabular-nums ${isDanger ? 'text-red-500' : isWarning ? 'text-amber-500' : 'text-emerald-600'}`}>
+          <span className={`text-3xl font-extrabold tabular-nums tracking-tight ${isDanger ? 'text-red-500' : isWarning ? 'text-amber-500' : 'text-emerald-600'}`}>
             {fmtTime(remaining)}
           </span>
-          <span className="text-xs text-slate-400 font-medium">remaining</span>
+          <span className="text-xs text-slate-400 font-medium">hold remaining</span>
         </div>
       </div>
       {isWarning && (
         <motion.p initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-          className={`text-xs font-semibold ${isDanger ? 'text-red-500' : 'text-amber-500'}`}>
-          {isDanger ? '⚠ Slot expiring soon!' : 'Please confirm your parking'}
+          className={`text-xs font-bold ${isDanger ? 'text-red-500 animate-pulse' : 'text-amber-500'}`}>
+          {isDanger ? '⚠ Hold expiring soon!' : 'Please confirm your parking'}
         </motion.p>
       )}
     </div>
@@ -96,41 +102,47 @@ function HoldTimer({ expiresAt, onExpired }) {
 // Geolocation card
 // ──────────────────────────────────────────────
 const GEO_STATES = {
-  idle:       { icon: LocateFixed,    color: 'text-slate-400',   bg: 'bg-slate-50',    label: 'Location not checked',       desc: 'Tap to verify your location' },
-  detecting:  { icon: Loader2,        color: 'text-sky-500',     bg: 'bg-sky-50',      label: 'Detecting location…',         desc: 'Using GPS, please wait' },
-  eligible:   { icon: CheckCircle,    color: 'text-emerald-600', bg: 'bg-emerald-50',  label: 'At Parking Entrance ✓',       desc: 'You can request a slot now' },
-  campus:     { icon: MapPin,         color: 'text-sky-500',     bg: 'bg-sky-50',      label: 'On Campus',                   desc: 'Move to the parking entrance to request' },
-  outside:    { icon: XCircle,        color: 'text-red-500',     bg: 'bg-red-50',      label: 'Outside Campus',              desc: 'You must be near the parking entrance to request' },
-  inaccurate: { icon: AlertTriangle,  color: 'text-amber-500',   bg: 'bg-amber-50',    label: 'GPS Accuracy Low',            desc: 'Move to open area and try again' },
-  denied:     { icon: Shield,         color: 'text-red-500',     bg: 'bg-red-50',      label: 'Location Permission Denied',  desc: 'Allow location access in your browser settings' },
-  error:      { icon: AlertTriangle,  color: 'text-amber-500',   bg: 'bg-amber-50',    label: 'Location Error',              desc: 'Could not get your location' },
-  demo:       { icon: Sparkles,       color: 'text-violet-500',  bg: 'bg-violet-50',   label: 'Demo Location Active',        desc: 'Simulated parking-entry location used' },
+  idle:       { icon: LocateFixed,    color: 'text-slate-500',   bg: 'bg-white border-slate-200',    label: 'Location not checked',       desc: 'Tap below to verify your campus location' },
+  detecting:  { icon: Loader2,        color: 'text-sky-600',     bg: 'bg-sky-50 border-sky-200',      label: 'Detecting location…',         desc: 'Acquiring GPS coordinates' },
+  eligible:   { icon: CheckCircle,    color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200',  label: 'At Parking Entrance ✓',       desc: 'You are verified at the entrance gate' },
+  campus:     { icon: MapPin,         color: 'text-sky-600',     bg: 'bg-sky-50 border-sky-200',      label: 'Inside Campus Perimeter',    desc: 'Move closer to the parking entrance to request' },
+  outside:    { icon: XCircle,        color: 'text-red-500',     bg: 'bg-red-50 border-red-200',      label: 'Outside Campus Perimeter',   desc: 'You must be on campus near the gate' },
+  inaccurate: { icon: AlertTriangle,  color: 'text-amber-600',   bg: 'bg-amber-50 border-amber-200',    label: 'GPS Accuracy Insufficient',   desc: 'Move to an open area without roof interference' },
+  denied:     { icon: Shield,         color: 'text-red-500',     bg: 'bg-red-50 border-red-200',      label: 'Location Permission Denied',  desc: 'Enable location permissions in browser settings' },
+  error:      { icon: AlertTriangle,  color: 'text-amber-600',   bg: 'bg-amber-50 border-amber-200',    label: 'Location Signal Timeout',     desc: 'Could not fetch GPS lock' },
+  demo:       { icon: Sparkles,       color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-300',   label: 'PSG Tech Gate Verified (Demo)', desc: '11.0245° N, 77.0072° E — Ready for allocation' },
 };
 
-function LocationCard({ geoState, onVerify, onDemoVerify }) {
+function LocationCard({ geoState, onVerify, onDemoVerify, isOnline }) {
   const cfg = GEO_STATES[geoState] || GEO_STATES.idle;
   const Icon = cfg.icon;
   return (
-    <div className={`rounded-2xl border p-4 ${cfg.bg}`}>
-      <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${cfg.bg}`}>
+    <div className={`rounded-3xl border p-4.5 shadow-sm transition-all ${cfg.bg}`}>
+      <div className="flex items-center gap-3.5">
+        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 bg-white shadow-sm border border-slate-100`}>
           <Icon className={`w-5 h-5 ${cfg.color} ${geoState === 'detecting' ? 'animate-spin' : ''}`} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className={`font-semibold text-sm ${cfg.color}`}>{cfg.label}</p>
-          <p className="text-xs text-slate-500 mt-0.5">{cfg.desc}</p>
+          <p className={`font-bold text-sm ${cfg.color}`}>{cfg.label}</p>
+          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{cfg.desc}</p>
         </div>
       </div>
-      <div className="flex gap-2 mt-3">
-        <button onClick={onVerify} disabled={geoState === 'detecting'}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-white border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50">
-          <LocateFixed className="w-4 h-4" />
+      <div className="flex gap-2.5 mt-3.5">
+        <button
+          onClick={onVerify}
+          disabled={geoState === 'detecting' || !isOnline}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 active:scale-98 transition-all disabled:opacity-50 shadow-sm"
+        >
+          <LocateFixed className="w-3.5 h-3.5 text-emerald-600" />
           {geoState === 'detecting' ? 'Detecting…' : 'Verify Location'}
         </button>
-        <button onClick={onDemoVerify}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-violet-500 text-white text-sm font-semibold hover:bg-violet-600 transition-colors">
-          <Sparkles className="w-4 h-4" />
-          Demo Location
+        <button
+          onClick={onDemoVerify}
+          disabled={!isOnline}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 active:scale-98 transition-all shadow-md shadow-emerald-600/20 disabled:opacity-50"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          Simulate Entrance
         </button>
       </div>
     </div>
@@ -140,83 +152,122 @@ function LocationCard({ geoState, onVerify, onDemoVerify }) {
 // ──────────────────────────────────────────────
 // Active Allocation Card
 // ──────────────────────────────────────────────
-function AllocationCard({ allocation, onConfirm, onCancel, onExit, onExpired, onNavigate }) {
+function AllocationCard({ allocation, onConfirm, onCancel, onExit, onExpired, onNavigate, isOnline }) {
   const [loading, setLoading] = useState('');
   const toast = useToast();
   const isHeld = allocation.status === 'held';
   const isConfirmed = allocation.status === 'confirmed';
 
   const act = async (fn, label, msg) => {
+    if (!isOnline) {
+      toast.error('Offline', 'Action requires an active internet connection.');
+      return;
+    }
     setLoading(label);
-    try { await fn(allocation.id); toast.success(msg); }
-    catch (e) { toast.error('Action Failed', e.message); }
-    finally { setLoading(''); }
+    try {
+      await fn(allocation.id);
+      toast.success(msg);
+    } catch (e) {
+      toast.error('Action Failed', e.message);
+    } finally {
+      setLoading('');
+    }
   };
 
   return (
-    <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
-      className={`rounded-2xl border-2 overflow-hidden ${isConfirmed ? 'border-emerald-400 bg-emerald-50' : 'border-amber-300 bg-amber-50'}`}>
+    <motion.div
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className={`rounded-3xl border-2 overflow-hidden shadow-lg ${
+        isConfirmed ? 'border-emerald-400 bg-emerald-50/50' : 'border-amber-300 bg-amber-50/50'
+      }`}
+    >
       {/* Banner */}
-      <div className={`px-4 py-2 flex items-center gap-2 ${isConfirmed ? 'bg-emerald-500' : 'bg-amber-500'}`}>
-        {isConfirmed ? <CheckCircle className="w-4 h-4 text-white" /> : <Clock className="w-4 h-4 text-white animate-pulse" />}
-        <span className="text-white text-sm font-bold">{isConfirmed ? 'Parking Confirmed' : 'Slot Temporarily Held'}</span>
-        <span className="ml-auto text-white/80 text-xs">{allocation.zone_name} · {allocation.slot_number}</span>
+      <div className={`px-4.5 py-2.5 flex items-center gap-2 ${isConfirmed ? 'bg-emerald-600' : 'bg-amber-500'}`}>
+        {isConfirmed ? (
+          <CheckCircle className="w-4 h-4 text-white" />
+        ) : (
+          <Clock className="w-4 h-4 text-white animate-pulse" />
+        )}
+        <span className="text-white text-xs font-bold uppercase tracking-wider">
+          {isConfirmed ? 'Parking Session Confirmed' : 'Slot Temporarily Reserved (3m Hold)'}
+        </span>
+        <span className="ml-auto text-white/90 text-xs font-bold">
+          {allocation.zone_name}
+        </span>
       </div>
 
-      <div className="p-4 flex flex-col sm:flex-row gap-4 items-center">
+      <div className="p-5 flex flex-col sm:flex-row gap-5 items-center">
         {isHeld && (
           <div className="flex-shrink-0">
             <HoldTimer expiresAt={allocation.expires_at} onExpired={onExpired} />
           </div>
         )}
         <div className="flex-1 w-full">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-14 h-14 rounded-2xl bg-white border-2 border-amber-200 flex flex-col items-center justify-center shadow-sm">
-              <ParkingCircle className="w-5 h-5 text-amber-500" />
-              <span className="font-bold text-lg text-slate-800 leading-none">{allocation.slot_number}</span>
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-16 h-16 rounded-2xl bg-white border-2 border-emerald-400 flex flex-col items-center justify-center shadow-md">
+              <span className="text-xs font-bold text-emerald-600 uppercase tracking-tight">Bay</span>
+              <span className="font-black text-2xl text-slate-900 leading-none">{allocation.slot_number}</span>
             </div>
             <div>
-              <p className="font-bold text-slate-800">{allocation.zone_name}</p>
-              <p className="text-sm text-slate-500 capitalize">{allocation.slot_vehicle_type} slot</p>
+              <p className="font-extrabold text-slate-900 text-base">{allocation.zone_name}</p>
+              <p className="text-xs font-semibold text-slate-500 capitalize mt-0.5">
+                {allocation.slot_vehicle_type} Slot • Priority Allocated
+              </p>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs text-emerald-700 font-bold">Navigation Route Active</span>
+              </div>
             </div>
           </div>
 
           {isConfirmed && (
-            <p className="text-xs text-emerald-700 bg-emerald-100 rounded-xl px-3 py-2 mb-3">
-              ✓ Your parking session is active. Click Exit when done.
-            </p>
+            <div className="bg-emerald-100/70 border border-emerald-200 rounded-2xl p-3 mb-4 flex items-center gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <p className="text-xs text-emerald-800 font-medium">
+                Vehicle parked. Tap <strong>Exit Parking</strong> when leaving the campus.
+              </p>
+            </div>
           )}
 
-          <div className="flex flex-wrap gap-2">
-            {/* Navigate button — always shown when allocation exists */}
-            <button onClick={onNavigate}
-              className="flex items-center gap-1.5 py-2 px-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-semibold text-sm transition-colors">
+          <div className="flex flex-wrap gap-2.5">
+            <button
+              onClick={onNavigate}
+              className="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-600/20"
+            >
               <Navigation className="w-4 h-4" />
-              Navigate
+              Navigate to Slot
             </button>
 
             {isHeld && (
               <>
-                <button onClick={() => act(onConfirm, 'confirm', 'Parking confirmed! 🎉')}
-                  disabled={loading === 'confirm'}
-                  className="flex-1 min-w-[120px] py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60">
+                <button
+                  onClick={() => act(onConfirm, 'confirm', 'Parking confirmed! 🎉')}
+                  disabled={loading === 'confirm' || !isOnline}
+                  className="flex-1 min-w-[130px] py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-600/20 disabled:opacity-60"
+                >
                   {loading === 'confirm' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                   Confirm Parked
                 </button>
-                <button onClick={() => act(onCancel, 'cancel', 'Allocation cancelled.')}
-                  disabled={loading === 'cancel'}
-                  className="py-2.5 px-4 bg-white border border-slate-200 text-red-500 rounded-xl font-semibold text-sm flex items-center gap-1.5 hover:bg-red-50 transition-colors disabled:opacity-60">
+                <button
+                  onClick={() => act(onCancel, 'cancel', 'Hold released.')}
+                  disabled={loading === 'cancel' || !isOnline}
+                  className="py-3 px-4 bg-white border border-slate-200 text-red-500 hover:bg-red-50 active:scale-98 rounded-2xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-60"
+                >
                   {loading === 'cancel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                  Cancel
+                  Release
                 </button>
               </>
             )}
+
             {isConfirmed && (
-              <button onClick={() => act(onExit, 'exit', 'Exited. Safe drive! 🚗')}
-                disabled={loading === 'exit'}
-                className="flex-1 min-w-[120px] py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60">
+              <button
+                onClick={() => act(onExit, 'exit', 'Exited. Safe drive! 🚗')}
+                disabled={loading === 'exit' || !isOnline}
+                className="flex-1 min-w-[130px] py-3 bg-slate-800 hover:bg-slate-900 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-60"
+              >
                 {loading === 'exit' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-                Exit Parking
+                Exit Parking Bay
               </button>
             )}
           </div>
@@ -229,7 +280,7 @@ function AllocationCard({ allocation, onConfirm, onCancel, onExit, onExpired, on
 // ──────────────────────────────────────────────
 // Queue Card
 // ──────────────────────────────────────────────
-function QueueCard({ queueEntry, onAccept, onDecline }) {
+function QueueCard({ queueEntry, onAccept, onDecline, isOnline }) {
   const [loading, setLoading] = useState('');
   const toast = useToast();
   const isOffered = queueEntry.status === 'offered';
@@ -247,50 +298,71 @@ function QueueCard({ queueEntry, onAccept, onDecline }) {
   }, [isOffered, queueEntry.offer_expires_at]);
 
   const act = async (fn, label, msg) => {
+    if (!isOnline) {
+      toast.error('Offline', 'Action requires internet.');
+      return;
+    }
     setLoading(label);
-    try { await fn(queueEntry.id); toast.success(msg); }
-    catch (e) { toast.error('Failed', e.message); }
-    finally { setLoading(''); }
+    try {
+      await fn(queueEntry.id);
+      toast.success(msg);
+    } catch (e) {
+      toast.error('Failed', e.message);
+    } finally {
+      setLoading('');
+    }
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-      className={`rounded-2xl border-2 p-4 ${isOffered ? 'border-violet-400 bg-violet-50' : 'border-sky-200 bg-sky-50'}`}>
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-12 h-12 rounded-xl bg-white border border-sky-200 flex items-center justify-center">
-          <span className="text-2xl font-bold text-sky-600">#{queueEntry.queue_position}</span>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`rounded-3xl border-2 p-5 shadow-sm ${
+        isOffered ? 'border-emerald-500 bg-emerald-50' : 'border-sky-200 bg-sky-50'
+      }`}
+    >
+      <div className="flex items-center gap-3.5 mb-3.5">
+        <div className="w-13 h-13 rounded-2xl bg-white border border-sky-200 flex items-center justify-center shadow-sm">
+          <span className="text-2xl font-black text-sky-600">#{queueEntry.queue_position}</span>
         </div>
         <div>
-          <p className="font-bold text-slate-800">{isOffered ? '🎉 Slot Offered!' : 'In Waiting Queue'}</p>
-          <p className="text-sm text-slate-500 capitalize">{queueEntry.vehicle_type} · Position {queueEntry.queue_position}</p>
+          <p className="font-extrabold text-slate-900 text-sm">{isOffered ? '🎉 Slot Allocated to You!' : 'Live Waiting Queue'}</p>
+          <p className="text-xs text-slate-500 capitalize mt-0.5">{queueEntry.vehicle_type} Queue • FIFO Priority Order</p>
         </div>
       </div>
+
       {isOffered && (
-        <div className="bg-white rounded-xl border border-violet-200 p-3 mb-3">
-          <p className="text-sm font-semibold text-violet-700">
-            A slot is available! Accept within {fmtTime(offerRemaining)}.
+        <div className="bg-white rounded-2xl border border-emerald-300 p-3.5 mb-3.5 shadow-sm">
+          <p className="text-xs font-bold text-emerald-800">
+            A slot has opened up! Claim your offer within <span className="tabular-nums text-emerald-600">{fmtTime(offerRemaining)}</span>.
           </p>
         </div>
       )}
+
       {isOffered && (
-        <div className="flex gap-2">
-          <button onClick={() => act(onAccept, 'accept', 'Slot accepted! Check your allocation.')}
-            disabled={loading === 'accept'}
-            className="flex-1 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-60">
+        <div className="flex gap-2.5">
+          <button
+            onClick={() => act(onAccept, 'accept', 'Slot claimed! Check your allocation.')}
+            disabled={loading === 'accept' || !isOnline}
+            className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 disabled:opacity-60"
+          >
             {loading === 'accept' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ThumbsUp className="w-4 h-4" />}
-            Accept
+            Accept & Reserve
           </button>
-          <button onClick={() => act(onDecline, 'decline', 'Slot declined.')}
-            disabled={loading === 'decline'}
-            className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl font-semibold text-sm flex items-center justify-center gap-1.5 hover:bg-slate-50 transition-colors disabled:opacity-60">
+          <button
+            onClick={() => act(onDecline, 'decline', 'Slot declined.')}
+            disabled={loading === 'decline' || !isOnline}
+            className="flex-1 py-3 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 active:scale-98 rounded-2xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-60"
+          >
             {loading === 'decline' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ThumbsDown className="w-4 h-4" />}
             Decline
           </button>
         </div>
       )}
+
       {!isOffered && (
-        <p className="text-xs text-sky-600 bg-sky-100 rounded-xl px-3 py-2">
-          You'll be notified when a slot becomes available.
+        <p className="text-xs text-sky-700 bg-sky-100/70 rounded-2xl px-3.5 py-2.5 font-medium">
+          You are in line. When an active hold expires or a vehicle departs, you will receive an automatic 60-second priority offer.
         </p>
       )}
     </motion.div>
@@ -298,14 +370,13 @@ function QueueCard({ queueEntry, onAccept, onDecline }) {
 }
 
 // ──────────────────────────────────────────────
-// Role-based availability summary
+// Separate Student & Staff Availability Summary
 // ──────────────────────────────────────────────
 function AvailabilityPanel({ availability, userRole }) {
-  // Filter to role-appropriate zones
   const isStaff = userRole === 'staff';
   const rows = (availability || []).filter(a => {
-    if (isStaff) return true; // staff see all
-    return a.staff_only === 0; // students see only non-staff
+    if (isStaff) return a.staff_only === 1 || a.category === 'staff';
+    return a.staff_only === 0;
   });
 
   const totAvail = rows.reduce((s, a) => s + (Number(a.available) || 0), 0);
@@ -313,28 +384,36 @@ function AvailabilityPanel({ availability, userRole }) {
   const totOcc   = rows.reduce((s, a) => s + (Number(a.occupied) || 0), 0);
 
   return (
-    <div className="bg-white rounded-2xl border border-surface-200 p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
-        <p className="font-semibold text-slate-700 text-sm">
-          {isStaff ? '🏢 Staff Parking' : '🎓 Student Parking'} Availability
-        </p>
-        <span className="text-xs text-slate-400">Live</span>
+    <div className="bg-white rounded-3xl border border-surface-200 p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="font-extrabold text-slate-900 text-sm">
+            {isStaff ? '🏢 Staff Parking Area' : '🎓 Student Parking Area'}
+          </p>
+          <p className="text-xs text-slate-400 font-medium">Authoritative real-time vacancy</p>
+        </div>
+        <span className="flex items-center gap-1 text-xs font-bold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Live
+        </span>
       </div>
-      <div className="grid grid-cols-3 gap-2 mb-3">
+
+      <div className="grid grid-cols-3 gap-2.5 mb-4">
         {[
-          { label: 'Available', value: totAvail, color: 'text-emerald-600 bg-emerald-50', icon: CheckCircle },
-          { label: 'Held',      value: totHeld,  color: 'text-amber-600 bg-amber-50',    icon: Clock },
-          { label: 'Occupied',  value: totOcc,   color: 'text-red-600 bg-red-50',         icon: XCircle },
+          { label: 'Available', value: totAvail, color: 'text-emerald-700 bg-emerald-50 border-emerald-100', icon: CheckCircle },
+          { label: 'Reserved',  value: totHeld,  color: 'text-amber-700 bg-amber-50 border-amber-100',    icon: Clock },
+          { label: 'Occupied',  value: totOcc,   color: 'text-rose-700 bg-rose-50 border-rose-100',       icon: XCircle },
         ].map(item => (
-          <div key={item.label} className={`rounded-xl p-3 flex flex-col items-center gap-1 ${item.color}`}>
-            <item.icon className="w-4 h-4" />
-            <span className="text-2xl font-bold tabular-nums">{item.value}</span>
-            <span className="text-xs font-medium">{item.label}</span>
+          <div key={item.label} className={`rounded-2xl p-3 flex flex-col items-center gap-1 border ${item.color}`}>
+            <item.icon className="w-4 h-4 opacity-80" />
+            <span className="text-2xl font-black tabular-nums tracking-tight">{item.value}</span>
+            <span className="text-xs font-bold uppercase tracking-wider opacity-75">{item.label}</span>
           </div>
         ))}
       </div>
-      {/* Per vehicle type */}
-      <div className="space-y-1.5">
+
+      {/* Breakdown per vehicle type */}
+      <div className="space-y-2">
         {['bike', 'car'].map(vt => {
           const vtRows = rows.filter(a => a.vehicle_type === vt);
           const avail = vtRows.reduce((s, a) => s + (Number(a.available) || 0), 0);
@@ -342,33 +421,47 @@ function AvailabilityPanel({ availability, userRole }) {
           if (total === 0) return null;
           const pct = total > 0 ? Math.round((avail / total) * 100) : 0;
           return (
-            <div key={vt} className="flex items-center gap-2 text-xs">
-              {vt === 'bike' ? <Bike className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" /> : <Car className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />}
-              <span className="text-slate-600 capitalize font-medium w-8">{vt}</span>
-              <div className="flex-1 h-2 rounded-full bg-surface-100">
-                <motion.div className="h-full rounded-full bg-emerald-400"
-                  initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8 }} />
+            <div key={vt} className="flex items-center gap-3 text-xs">
+              {vt === 'bike' ? (
+                <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                  <Bike className="w-3.5 h-3.5 text-emerald-700" />
+                </div>
+              ) : (
+                <div className="w-6 h-6 rounded-lg bg-sky-100 flex items-center justify-center flex-shrink-0">
+                  <Car className="w-3.5 h-3.5 text-sky-700" />
+                </div>
+              )}
+              <span className="text-slate-700 capitalize font-bold w-12">{vt}</span>
+              <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                <motion.div
+                  className={`h-full rounded-full ${vt === 'bike' ? 'bg-emerald-500' : 'bg-sky-500'}`}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pct}%` }}
+                  transition={{ duration: 0.8 }}
+                />
               </div>
-              <span className="font-semibold text-slate-700">{avail}/{total}</span>
+              <span className="font-extrabold text-slate-800 tabular-nums">{avail} / {total} free</span>
             </div>
           );
         })}
       </div>
-      {!isStaff && (
-        <p className="text-xs text-slate-400 mt-2 pt-2 border-t border-surface-100">
-          Staff-only zones are not shown. Your allocation is restricted to student-eligible slots.
-        </p>
-      )}
+
+      <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
+        {isStaff
+          ? 'Staff accounts access Zone C (Cars) and Zone D (Bikes).'
+          : 'Student accounts access Zone A (Bikes) and Zone B (Cars). Staff zones are strictly segregated.'}
+      </p>
     </div>
   );
 }
 
 // ──────────────────────────────────────────────
-// Main Dashboard
+// Main Student / Staff Dashboard Component
 // ──────────────────────────────────────────────
 export default function StudentDashboard() {
   const { user, logout } = useAuth();
   const { connected } = useSocket() || {};
+  const isOnline = useOnlineStatus();
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -397,7 +490,7 @@ export default function StudentDashboard() {
     try {
       const dash = await studentApi.dashboard();
       setData(dash.data);
-      // load slots for map
+
       try {
         const r = await fetch('/api/student/slots-map', { credentials: 'include' });
         if (r.ok) {
@@ -406,16 +499,15 @@ export default function StudentDashboard() {
           if (d.zones) setZones(d.zones);
         }
       } catch {
-        // fallback: no slot map data
+        // use cached
       }
 
-      // If active allocation exists but route is not loaded yet, fetch route
       if (dash.data?.activeAllocation?.slot_id && !route) {
         try {
           const res = await studentApi.route(dash.data.activeAllocation.slot_id);
           if (res.data?.route) setRoute(res.data.route);
         } catch {
-          // handled by client fallback
+          // fallback
         }
       }
     } catch (e) {
@@ -424,9 +516,11 @@ export default function StudentDashboard() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [toast]);
+  }, [toast, route]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   // ── Socket events ──
   useSocketEvent('slot:held',      () => load(true));
@@ -438,9 +532,9 @@ export default function StudentDashboard() {
 
   useSocketEvent('allocation:reallocated', (payload) => {
     setIsReallocating(true);
-    setReallocationMsg(payload?.message || 'Your slot has been reallocated.');
+    setReallocationMsg(payload?.message || 'Your slot was reallocated.');
     if (payload?.type === 'reallocated' && payload.slot) {
-      setRoute(null); // will be refreshed with new route
+      setRoute(null);
     }
     setTimeout(() => setIsReallocating(false), 3000);
     load(true);
@@ -450,7 +544,10 @@ export default function StudentDashboard() {
 
   // ── Geolocation ──
   const verifyLocation = useCallback(() => {
-    if (!navigator.geolocation) { setGeoState('error'); return; }
+    if (!navigator.geolocation) {
+      setGeoState('error');
+      return;
+    }
     setGeoState('detecting');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -480,17 +577,21 @@ export default function StudentDashboard() {
       await studentApi.verifyLocation({ lat: demoLat, lng: demoLng, accuracy: 5, isDemoMode: true });
       setGeoCoords({ lat: demoLat, lng: demoLng, accuracy: 5, demo: true });
       setGeoState('demo');
-      toast.success('Demo location set', 'Simulated at parking entrance.');
+      toast.success('Entrance Simulated', 'Location locked to PSG Tech Main Gate.');
     } catch {
       setGeoState('eligible');
       setGeoCoords({ lat: 11.0245, lng: 77.0072, accuracy: 5, demo: true });
-      toast.info('Demo Mode', 'Location simulated at parking entrance.');
+      toast.info('Demo Mode', 'Simulated at parking entrance.');
     }
   }, [toast]);
 
   // ── Request slot ──
   const requestSlot = useCallback(async () => {
     if (!geoCoords) return;
+    if (!isOnline) {
+      toast.error('Offline', 'Cannot allocate slot while offline.');
+      return;
+    }
     setRequesting(true);
     try {
       const res = await studentApi.requestSlot({
@@ -501,11 +602,12 @@ export default function StudentDashboard() {
         isDemoMode: geoCoords.demo || false,
       });
       if (res.data.type === 'allocated') {
-        toast.success(`Slot ${res.data.slot.slot_number} Allocated!`, '3 minutes to confirm parking.');
+        toast.success(`Slot ${res.data.slot.slot_number} Allocated!`, '3 minutes hold timer initiated.');
         setRoute(res.data.route);
-        setTab('map'); // Auto-switch to map tab
+        setTab('myslot');
       } else if (res.data.type === 'queued') {
-        toast.info('Added to Queue', `Position #${res.data.queuePosition}`);
+        toast.info('Added to Waiting Queue', `Position #${res.data.queuePosition}`);
+        setTab('myslot');
       }
       load(true);
     } catch (e) {
@@ -513,7 +615,7 @@ export default function StudentDashboard() {
     } finally {
       setRequesting(false);
     }
-  }, [geoCoords, vehicleType, toast, load]);
+  }, [geoCoords, vehicleType, isOnline, toast, load]);
 
   // ── Actions ──
   const confirmParking = useCallback(async (id) => {
@@ -536,7 +638,7 @@ export default function StudentDashboard() {
   const acceptOffer = useCallback(async (id) => {
     const res = await studentApi.acceptQueueOffer(id);
     if (res.data?.route) setRoute(res.data.route);
-    setTab('map');
+    setTab('myslot');
     load(true);
   }, [load]);
 
@@ -555,151 +657,187 @@ export default function StudentDashboard() {
     navigate('/login');
   };
 
-  // ── Derived ──
+  // ── Derived State ──
   const canRequest = (geoState === 'eligible' || geoState === 'demo')
     && !data?.activeAllocation
     && !data?.queueEntry
-    && !requesting;
+    && !requesting
+    && isOnline;
 
   const requestDisabledReason = (() => {
-    if (data?.activeAllocation) return 'You already have an active allocation.';
-    if (data?.queueEntry) return 'You are already in the queue.';
-    if (geoState === 'idle') return 'Please verify your location first.';
-    if (geoState === 'detecting') return 'Detecting location…';
-    if (geoState === 'campus') return 'Move closer to the parking entrance.';
-    if (geoState === 'outside') return 'You must be inside the campus geofence.';
-    if (geoState === 'inaccurate') return 'GPS accuracy too low. Move to open area.';
-    if (geoState === 'denied') return 'Location permission denied.';
+    if (!isOnline) return 'Offline — Reconnect to request parking.';
+    if (data?.activeAllocation) return 'You currently hold an active parking allocation.';
+    if (data?.queueEntry) return 'You are currently in the waiting queue.';
+    if (geoState === 'idle') return 'Please verify your location or use demo entrance.';
+    if (geoState === 'detecting') return 'Acquiring GPS location…';
+    if (geoState === 'campus') return 'Please approach the parking gate area to request.';
+    if (geoState === 'outside') return 'You are outside the campus boundary.';
+    if (geoState === 'inaccurate') return 'GPS accuracy is too low. Move to an open area.';
+    if (geoState === 'denied') return 'Location permission denied by browser.';
     return null;
   })();
 
-  const unreadCount = data?.unreadCount || 0;
+  const isStaff = user?.role === 'staff' || user?.user_category === 'staff';
+
+  // 5 Bottom Navigation Tabs
+  const tabs = [
+    { id: 'home', icon: Home, label: 'Home' },
+    { id: 'map', icon: Map, label: 'Parking Map', badge: data?.activeAllocation ? 'LIVE' : null },
+    { id: 'myslot', icon: ParkingCircle, label: 'My Slot', badge: data?.activeAllocation ? '!' : null },
+    { id: 'history', icon: History, label: 'History' },
+    { id: 'profile', icon: User, label: 'Profile' },
+  ];
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-surface-50">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-14 h-14 rounded-full border-4 border-emerald-200 border-t-emerald-500 animate-spin" />
-          <p className="text-slate-500 font-semibold">Loading your dashboard…</p>
+          <div className="w-14 h-14 rounded-full border-4 border-emerald-200 border-t-emerald-600 animate-spin" />
+          <p className="text-slate-700 font-bold text-sm">Initializing ParkPulse 2.0…</p>
         </div>
       </div>
     );
   }
 
-  const tabs = [
-    { id: 'home', icon: Home, label: 'Home' },
-    { id: 'map', icon: Map, label: 'Map', badge: data?.activeAllocation ? '!' : null },
-    { id: 'history', icon: History, label: 'History' },
-    { id: 'notifications', icon: Bell, label: 'Alerts', badge: unreadCount > 0 ? unreadCount : null },
-  ];
-
-  const isStaff = user?.role === 'staff';
-
   return (
-    <div className="min-h-screen bg-surface-50 flex flex-col">
-      {/* Top Bar */}
-      <header className="bg-white border-b border-surface-200 px-4 py-3 sticky top-0 z-40">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
+    <div className="min-h-screen bg-surface-50 flex flex-col font-sans">
+      <OfflineNotice />
+
+      {/* ── Mobile-First Header ── */}
+      <header className="bg-white/95 backdrop-blur-md border-b border-surface-200 px-4 py-3 sticky top-0 z-30 shadow-xs">
+        <div className="max-w-md mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <InitialsAvatar name={user?.name} size="md" />
+            <InitialsAvatar name={user?.name} size="sm" />
             <div>
-              <p className="font-bold text-slate-800 text-sm leading-tight">{user?.name}</p>
-              <div className="flex items-center gap-1.5">
-                <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${isStaff ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'}`}>
-                  {isStaff ? '🏢 Staff' : '🎓 Student'}
+              <p className="font-extrabold text-slate-900 text-sm leading-tight truncate max-w-[170px] sm:max-w-[220px]">
+                {user?.name}
+              </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                  isStaff ? 'bg-violet-100 text-violet-700' : 'bg-emerald-100 text-emerald-800'
+                }`}>
+                  {isStaff ? 'Staff Privilege' : 'Student Privilege'}
                 </span>
-                <span className="text-xs text-slate-400">PSG College of Technology</span>
               </div>
             </div>
           </div>
+
           <div className="flex items-center gap-2">
-            <span className="hidden sm:flex items-center gap-1 text-xs font-semibold bg-amber-100 text-amber-700 px-2 py-1 rounded-full">
-              🔬 Demo
-            </span>
-            <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full font-semibold ${connected ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
-              {connected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+            <div className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-full font-bold ${
+              connected ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+            }`}>
+              {connected ? <Wifi className="w-3 h-3 text-emerald-600" /> : <WifiOff className="w-3 h-3" />}
               <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
             </div>
-            <button onClick={() => { setRefreshing(true); load(true); }} disabled={refreshing}
-              className="p-1.5 rounded-lg text-slate-400 hover:bg-surface-100 transition-colors">
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
-            <button onClick={handleLogout}
-              className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition-colors">
-              <LogOut className="w-4 h-4" />
+
+            <button
+              onClick={() => { setRefreshing(true); load(true); }}
+              disabled={refreshing}
+              aria-label="Refresh data"
+              className="p-2 rounded-xl text-slate-500 hover:bg-surface-100 active:scale-95 transition-all"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-emerald-600' : ''}`} />
             </button>
           </div>
         </div>
       </header>
 
-      {/* Content */}
+      {/* ── Main Viewport Container ── */}
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-lg mx-auto px-4 py-5 space-y-4 pb-24">
+        <div className="max-w-md mx-auto px-4 py-4 space-y-4 pb-28">
 
-          {/* Reallocation banner */}
+          {/* Reallocation alert banner */}
           <AnimatePresence>
             {reallocationMsg && (
-              <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
-                className="rounded-2xl border-2 border-amber-400 bg-amber-50 p-4 flex items-start gap-3">
+              <motion.div
+                initial={{ opacity: 0, y: -16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -16 }}
+                className="rounded-2xl border-2 border-amber-400 bg-amber-50 p-4 flex items-start gap-3 shadow-sm"
+              >
                 <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className="font-semibold text-amber-800">Slot Reallocated</p>
-                  <p className="text-sm text-amber-700 mt-0.5">{reallocationMsg}</p>
+                  <p className="font-bold text-amber-900 text-sm">Slot Reallocated</p>
+                  <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">{reallocationMsg}</p>
                 </div>
-                <button onClick={() => setReallocationMsg(null)} className="text-amber-400 hover:text-amber-600">
+                <button onClick={() => setReallocationMsg(null)} className="text-amber-500 hover:text-amber-700 p-1">
                   <X className="w-4 h-4" />
                 </button>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* ──── HOME TAB ──── */}
+          {/* ══════════════════════════════════════════
+              TAB 1: HOME
+          ══════════════════════════════════════════ */}
           {tab === 'home' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-              <LocationCard geoState={geoState} onVerify={verifyLocation} onDemoVerify={demoVerify} />
+              {/* Geofence verification status */}
+              <LocationCard
+                geoState={geoState}
+                onVerify={verifyLocation}
+                onDemoVerify={demoVerify}
+                isOnline={isOnline}
+              />
 
-              <AnimatePresence mode="wait">
-                {data?.activeAllocation && (
-                  <AllocationCard
-                    key="alloc"
-                    allocation={data.activeAllocation}
-                    onConfirm={confirmParking}
-                    onCancel={cancelAllocation}
-                    onExit={exitParking}
-                    onExpired={() => load(true)}
-                    onNavigate={() => setTab('map')}
-                  />
-                )}
-                {data?.queueEntry && !data?.activeAllocation && (
-                  <QueueCard
-                    key="queue"
-                    queueEntry={data.queueEntry}
-                    onAccept={acceptOffer}
-                    onDecline={declineOffer}
-                  />
-                )}
-              </AnimatePresence>
+              {/* Active Allocation Quick Card if already holding slot */}
+              {data?.activeAllocation && (
+                <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-3xl p-4.5 shadow-lg flex items-center justify-between">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center font-black text-xl">
+                      {data.activeAllocation.slot_number}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-emerald-200 uppercase tracking-wider">Active Reservation</p>
+                      <p className="text-sm font-extrabold">{data.activeAllocation.zone_name}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setTab('myslot')}
+                    className="bg-white text-emerald-800 text-xs font-extrabold px-3 py-2 rounded-xl shadow-md active:scale-95 transition-all flex items-center gap-1"
+                  >
+                    <span>View Slot</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
 
-              {/* Vehicle selector (only when no active allocation/queue) */}
+              {/* Vehicle selector */}
               {!data?.activeAllocation && !data?.queueEntry && (
-                <div className="bg-white rounded-2xl border border-surface-200 p-4 shadow-sm">
+                <div className="bg-white rounded-3xl border border-surface-200 p-4.5 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm font-semibold text-slate-600">Select Vehicle Type</p>
-                    <span className="text-xs text-slate-400 capitalize">{isStaff ? 'Staff' : 'Student'} slots only</span>
+                    <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Vehicle Class</p>
+                    <span className="text-xs font-semibold text-emerald-600">
+                      {isStaff ? 'Staff Parking Area' : 'Student Parking Area'}
+                    </span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { type: 'bike', label: 'Bike', icon: Bike, color: 'emerald' },
-                      { type: 'car',  label: 'Car',  icon: Car,  color: 'sky' },
+                      { type: 'bike', label: 'Bike', icon: Bike, desc: isStaff ? 'Zone D' : 'Zone A' },
+                      { type: 'car',  label: 'Car',  icon: Car,  desc: isStaff ? 'Zone C' : 'Zone B' },
                     ].map(v => {
                       const active = vehicleType === v.type;
                       return (
-                        <button key={v.type} onClick={() => setVehicleType(v.type)}
-                          className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${
-                            active ? `border-${v.color}-400 bg-${v.color}-50` : 'border-slate-200 bg-white hover:border-slate-300'
+                        <button
+                          key={v.type}
+                          onClick={() => setVehicleType(v.type)}
+                          className={`flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all active:scale-98 text-left ${
+                            active
+                              ? 'border-emerald-500 bg-emerald-50/60 shadow-sm'
+                              : 'border-slate-200 bg-white hover:border-slate-300'
+                          }`}
+                        >
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                            active ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500'
                           }`}>
-                          <v.icon className={`w-8 h-8 ${active ? `text-${v.color}-500` : 'text-slate-400'}`} />
-                          <span className={`font-bold text-sm ${active ? `text-${v.color}-700` : 'text-slate-500'}`}>{v.label}</span>
+                            <v.icon className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className={`block font-bold text-sm leading-tight ${active ? 'text-emerald-900' : 'text-slate-800'}`}>
+                              {v.label}
+                            </span>
+                            <span className="text-[11px] text-slate-400 font-semibold">{v.desc}</span>
+                          </div>
                         </button>
                       );
                     })}
@@ -707,38 +845,50 @@ export default function StudentDashboard() {
                 </div>
               )}
 
-              {/* Availability */}
+              {/* Real-time Category Availability */}
               <AvailabilityPanel availability={data?.availability} userRole={user?.role} />
 
-              {/* Request Button */}
+              {/* Big Request Button */}
               {!data?.activeAllocation && !data?.queueEntry && (
-                <div className="space-y-2">
+                <div className="space-y-2 pt-1">
                   <motion.button
-                    whileHover={canRequest ? { scale: 1.02 } : {}}
                     whileTap={canRequest ? { scale: 0.98 } : {}}
                     onClick={requestSlot}
                     disabled={!canRequest || requesting}
                     id="request-slot-btn"
-                    className={`w-full py-4 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-lg ${
+                    className={`w-full py-4 rounded-3xl font-extrabold text-base flex items-center justify-center gap-3 transition-all shadow-xl ${
                       canRequest
-                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-200'
-                        : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
-                    }`}>
-                    {requesting
-                      ? <><Loader2 className="w-5 h-5 animate-spin" />Finding Your Slot…</>
-                      : <><ParkingCircle className="w-6 h-6" />Get My Parking Slot</>}
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/25 active:scale-98 cursor-pointer'
+                        : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                    }`}
+                  >
+                    {requesting ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>Allocating Optimal Bay…</span>
+                      </>
+                    ) : (
+                      <>
+                        <ParkingCircle className="w-6 h-6" />
+                        <span>Get My Parking Slot</span>
+                      </>
+                    )}
                   </motion.button>
                   {requestDisabledReason && !canRequest && (
-                    <p className="text-xs text-center text-slate-400">{requestDisabledReason}</p>
+                    <p className="text-xs text-center text-slate-400 font-medium px-2">
+                      {requestDisabledReason}
+                    </p>
                   )}
                 </div>
               )}
             </motion.div>
           )}
 
-          {/* ──── MAP TAB ──── */}
+          {/* ══════════════════════════════════════════
+              TAB 2: PARKING MAP
+          ══════════════════════════════════════════ */}
           {tab === 'map' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
               <ParkingMap
                 slots={slots}
                 zones={zones}
@@ -752,97 +902,187 @@ export default function StudentDashboard() {
             </motion.div>
           )}
 
-          {/* ──── HISTORY TAB ──── */}
-          {tab === 'history' && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
-              <h2 className="font-bold text-slate-800">Parking History</h2>
-              {!data?.recentHistory?.length ? (
-                <div className="bg-white rounded-2xl border border-surface-200 p-8 text-center">
-                  <History className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                  <p className="text-slate-500 font-medium">No history yet</p>
-                  <p className="text-sm text-slate-400">Completed sessions will appear here.</p>
-                </div>
-              ) : data.recentHistory.map(h => (
-                <div key={h.id} className="bg-white rounded-2xl border border-surface-200 p-4 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
-                      <ParkingCircle className="w-5 h-5 text-slate-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-slate-800">{h.slot_number} · {h.zone_name}</p>
-                      <p className="text-xs text-slate-400">{new Date(h.created_at).toLocaleString()}</p>
-                    </div>
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full capitalize ${
-                      h.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' :
-                      h.status === 'cancelled' ? 'bg-red-100 text-red-600' :
-                      h.status === 'expired'   ? 'bg-amber-100 text-amber-700' :
-                      'bg-slate-100 text-slate-600'
-                    }`}>{h.status}</span>
+          {/* ══════════════════════════════════════════
+              TAB 3: MY SLOT
+          ══════════════════════════════════════════ */}
+          {tab === 'myslot' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-extrabold text-slate-900 text-base">My Parking Slot</h2>
+                <span className="text-xs text-slate-400 font-semibold">Active Session</span>
+              </div>
+
+              {data?.activeAllocation ? (
+                <AllocationCard
+                  allocation={data.activeAllocation}
+                  onConfirm={confirmParking}
+                  onCancel={cancelAllocation}
+                  onExit={exitParking}
+                  onExpired={() => load(true)}
+                  onNavigate={() => setTab('map')}
+                  isOnline={isOnline}
+                />
+              ) : data?.queueEntry ? (
+                <QueueCard
+                  queueEntry={data.queueEntry}
+                  onAccept={acceptOffer}
+                  onDecline={declineOffer}
+                  isOnline={isOnline}
+                />
+              ) : (
+                <div className="bg-white rounded-3xl border border-surface-200 p-8 text-center shadow-sm space-y-4">
+                  <div className="w-16 h-16 rounded-3xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+                    <ParkingCircle className="w-8 h-8" />
                   </div>
+                  <div>
+                    <p className="font-extrabold text-slate-800 text-base">No Active Slot</p>
+                    <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                      Verify your location at the parking gate and request a slot to get turn-by-turn guidance.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setTab('home')}
+                    className="bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold text-xs py-3 px-6 rounded-2xl shadow-md shadow-emerald-600/20"
+                  >
+                    Go to Home & Request
+                  </button>
                 </div>
-              ))}
+              )}
             </motion.div>
           )}
 
-          {/* ──── NOTIFICATIONS TAB ──── */}
-          {tab === 'notifications' && (
+          {/* ══════════════════════════════════════════
+              TAB 4: HISTORY
+          ══════════════════════════════════════════ */}
+          {tab === 'history' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
               <div className="flex items-center justify-between">
-                <h2 className="font-bold text-slate-800">Notifications</h2>
-                {unreadCount > 0 && (
-                  <button onClick={markNotificationsRead} className="text-xs text-emerald-600 font-semibold hover:underline">
-                    Mark all read
-                  </button>
-                )}
+                <h2 className="font-extrabold text-slate-900 text-base">Parking History</h2>
+                <span className="text-xs text-slate-400 font-semibold">Past Sessions</span>
               </div>
-              {!data?.notifications?.length ? (
-                <div className="bg-white rounded-2xl border border-surface-200 p-8 text-center">
-                  <Bell className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                  <p className="text-slate-500 font-medium">No notifications</p>
+
+              {!data?.recentHistory?.length ? (
+                <div className="bg-white rounded-3xl border border-surface-200 p-8 text-center shadow-sm">
+                  <History className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+                  <p className="text-slate-700 font-bold text-sm">No History Yet</p>
+                  <p className="text-xs text-slate-400 mt-1">Completed parking records will appear here.</p>
                 </div>
-              ) : data.notifications.map(n => (
-                <div key={n.id} className={`bg-white rounded-2xl border p-4 shadow-sm ${!n.is_read ? 'border-emerald-200' : 'border-surface-200'}`}>
-                  <div className="flex items-start gap-3">
-                    <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${n.is_read ? 'bg-slate-200' : 'bg-emerald-500'}`} />
-                    <div className="flex-1">
-                      <p className="font-semibold text-slate-800 text-sm">{n.title}</p>
-                      <p className="text-sm text-slate-500 mt-0.5">{n.message}</p>
-                      <p className="text-xs text-slate-400 mt-1">{new Date(n.created_at).toLocaleString()}</p>
+              ) : (
+                data.recentHistory.map(h => (
+                  <div key={h.id} className="bg-white rounded-2xl border border-surface-200 p-4 shadow-sm flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0 text-slate-600">
+                      <ParkingCircle className="w-5 h-5 text-emerald-600" />
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-slate-900 text-sm truncate">
+                        Bay {h.slot_number} • {h.zone_name}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">{new Date(h.created_at).toLocaleString()}</p>
+                    </div>
+                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider capitalize ${
+                      h.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800' :
+                      h.status === 'cancelled' ? 'bg-rose-100 text-rose-700' :
+                      h.status === 'expired'   ? 'bg-amber-100 text-amber-800' :
+                      'bg-slate-100 text-slate-600'
+                    }`}>
+                      {h.status}
+                    </span>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </motion.div>
           )}
+
+          {/* ══════════════════════════════════════════
+              TAB 5: PROFILE
+          ══════════════════════════════════════════ */}
+          {tab === 'profile' && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+              <div className="bg-white rounded-3xl border border-surface-200 p-5 shadow-sm text-center">
+                <div className="mx-auto flex justify-center mb-3">
+                  <InitialsAvatar name={user?.name} size="lg" />
+                </div>
+                <h3 className="font-black text-slate-900 text-lg">{user?.name}</h3>
+                <p className="text-xs text-slate-500 font-medium">{user?.email}</p>
+
+                <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Authoritative {isStaff ? 'Staff Account' : 'Student Account'}</span>
+                </div>
+              </div>
+
+              {/* Account Details Card */}
+              <div className="bg-white rounded-3xl border border-surface-200 p-5 shadow-sm space-y-3.5 text-xs">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <span className="text-slate-500 font-semibold">Campus</span>
+                  <span className="font-bold text-slate-900">PSG College of Technology</span>
+                </div>
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <span className="text-slate-500 font-semibold">Allowed Parking Area</span>
+                  <span className="font-bold text-slate-900">
+                    {isStaff ? 'Staff Parking (Zone C & D)' : 'Student Parking (Zone A & B)'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <span className="text-slate-500 font-semibold">Registered Vehicle</span>
+                  <span className="font-bold text-slate-900 capitalize">{user?.vehicleType || vehicleType}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-semibold">App Version</span>
+                  <span className="font-bold text-emerald-600">ParkPulse v2.0 (PWA)</span>
+                </div>
+              </div>
+
+              {/* Logout Action */}
+              <button
+                onClick={handleLogout}
+                className="w-full py-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 font-bold text-xs flex items-center justify-center gap-2 hover:bg-rose-100 active:scale-98 transition-all shadow-xs"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sign Out of Account</span>
+              </button>
+            </motion.div>
+          )}
+
         </div>
       </main>
 
-      {/* Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-surface-200 z-40">
-        <div className="max-w-lg mx-auto flex">
+      {/* ── Fixed Bottom Navigation Bar (5 Mobile Tabs) ── */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-surface-200 z-40 safe-bottom">
+        <div className="max-w-md mx-auto flex items-center justify-around">
           {tabs.map(t => {
             const active = tab === t.id;
             return (
               <button
                 key={t.id}
-                onClick={() => { setTab(t.id); if (t.id === 'notifications') markNotificationsRead(); }}
-                className={`flex-1 flex flex-col items-center gap-1 py-2.5 transition-colors relative ${active ? 'text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
+                onClick={() => setTab(t.id)}
+                className={`flex-1 flex flex-col items-center gap-1 py-2.5 transition-colors relative active:scale-95 ${
+                  active ? 'text-emerald-600 font-bold' : 'text-slate-400 hover:text-slate-600 font-medium'
+                }`}
               >
                 <div className="relative">
-                  <t.icon className="w-5 h-5" />
+                  <t.icon className={`w-5 h-5 ${active ? 'stroke-[2.5px]' : 'stroke-2'}`} />
                   {t.badge && (
-                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold leading-none">
-                      {t.badge === '!' ? '!' : t.badge > 9 ? '9+' : t.badge}
+                    <span className="absolute -top-1 -right-2 bg-emerald-600 text-white text-[9px] px-1 rounded-full font-black leading-tight animate-pulse">
+                      {t.badge}
                     </span>
                   )}
                 </div>
-                <span className="text-xs font-medium">{t.label}</span>
-                {active && <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-emerald-500 rounded-full" />}
+                <span className="text-[10px] tracking-tight">{t.label}</span>
+                {active && (
+                  <motion.div
+                    layoutId="tab-indicator"
+                    className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-emerald-500 rounded-full"
+                  />
+                )}
               </button>
             );
           })}
         </div>
       </nav>
+
+      {/* PWA Native & iOS Install Banner */}
+      <PWAInstallBanner />
     </div>
   );
 }
